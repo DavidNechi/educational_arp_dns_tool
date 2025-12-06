@@ -3,7 +3,7 @@ from typing import Optional
 from scapy.all import ARP, Ether, sendp, getmacbyip, get_if_hwaddr, conf
 import time
 
-
+#TODO: redirect victims packets to router and vice versa
 def _resolve_mac(ip: str) -> str:
     """
     Resolve a target IP to a MAC address using ARP. Returns None if unknown.
