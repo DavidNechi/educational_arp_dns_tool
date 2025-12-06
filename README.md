@@ -72,12 +72,6 @@ pip install --upgrade pip
 pip install scapy
 ```
 
-Optional: allow Python to use raw sockets without requiring sudo every time:
-
-```
-sudo setcap cap_net_raw,cap_net_admin=eip $(which python3)
-```
-
 If this fails, simply run the application with `sudo`.
 
 ---
@@ -159,3 +153,4 @@ source .venv/bin/activate
 pip install scapy
 sudo python3 -m tool.cli discover
 ```
+
