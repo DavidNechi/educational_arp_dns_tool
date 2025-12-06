@@ -14,6 +14,7 @@ def main():
         help="ARP scan a subnet (use -r/--ip-range to set CIDR)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    #TODO: Add error handling so command only accepts xxx.xxx.xxx.xxx/yy type
     discover_parser.add_argument(
         "-r",
         "--ip-range",
