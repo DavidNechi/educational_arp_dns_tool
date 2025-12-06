@@ -1,5 +1,15 @@
 import argparse
+import re
 from tool import network_discovery, arp_lab, dns_lab, analysis, defense_demo
+
+
+def _cidr(arg_value: str) -> str:
+    pattern = re.compile(
+        r"^(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)/(3[0-2]|[12]?\\d)$"
+    )
+    if not pattern.match(arg_value):
+        raise argparse.ArgumentTypeError("IP range must be in CIDR form like 192.168.1.0/24")
+    return arg_value
 
 def main():
     parser = argparse.ArgumentParser(
@@ -14,11 +24,11 @@ def main():
         help="ARP scan a subnet (use -r/--ip-range to set CIDR)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    #TODO: Add error handling so command only accepts xxx.xxx.xxx.xxx/yy type
     discover_parser.add_argument(
         "-r",
         "--ip-range",
         default="192.168.178.0/24",
+        type=_cidr,
         help="CIDR notation for ARP discovery (default: 192.168.178.0/24)",
     )
     sub.add_parser("arp-demo", help="Demonstrate ARP poisoning in a lab")
