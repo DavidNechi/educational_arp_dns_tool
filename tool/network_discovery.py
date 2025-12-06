@@ -8,7 +8,7 @@ class NetworkDiscovery:
     Simple ARP-based network discovery for a lab network.
     """
 
-    def __init__(self, ip_range: str = "192.168.56.0/24"):
+    def __init__(self, ip_range: str = "192.168.178.0/24"):
         # I assume a host-only / lab network by default.
         self.ip_range = ip_range
         self.discovered_hosts = []  # {"ip", "mac"}
@@ -63,13 +63,12 @@ class NetworkDiscovery:
         print()
 
 
-def run() -> None:
+def run(ip_range: str = "192.168.178.0/24") -> None:
     """
     Entry point used by cli.py.
     This keeps cli.py clean and lets us treat this module as "one scenario".
     """
-    # TODO: later we might read the IP range from CLI args instead of hardcoding.
-    discovery = NetworkDiscovery(ip_range="192.168.56.0/24")
+    discovery = NetworkDiscovery(ip_range=ip_range)
 
     # 1) Scan
     discovery.scan_arp_range()
