@@ -3,22 +3,27 @@ from tool import network_discovery, arp_lab, dns_lab, analysis, defense_demo
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Educational ARP & DNS Manipulation Lab Tool"
+        description="Educational ARP & DNS Manipulation Lab Tool",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     sub = parser.add_subparsers(dest="cmd")
 
-    discover_parser = sub.add_parser("discover")
+    discover_parser = sub.add_parser(
+        "discover",
+        help="ARP scan a subnet (use -r/--ip-range to set CIDR)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     discover_parser.add_argument(
         "-r",
         "--ip-range",
         default="192.168.178.0/24",
         help="CIDR notation for ARP discovery (default: 192.168.178.0/24)",
     )
-    sub.add_parser("arp-demo")
-    sub.add_parser("dns-demo")
-    sub.add_parser("analyze")
-    sub.add_parser("defense")
+    sub.add_parser("arp-demo", help="Demonstrate ARP poisoning in a lab")
+    sub.add_parser("dns-demo", help="Demonstrate DNS spoofing in a lab")
+    sub.add_parser("analyze", help="Analyze captured ARP/DNS traffic")
+    sub.add_parser("defense", help="Show mitigation examples and defenses")
 
     args = parser.parse_args()
 
