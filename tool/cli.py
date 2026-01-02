@@ -25,6 +25,7 @@ def main():
             "Examples:\n"
             "  python -m tool.cli discover -r 192.168.178.0/24\n"
             "  python -m tool.cli arp-demo 192.168.178.1 192.168.178.63 -I eth0 -c 5 -i 1\n"
+            "  python -m tool.cli dns-demo"
         ),
     )
 

