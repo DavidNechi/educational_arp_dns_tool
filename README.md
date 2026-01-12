@@ -1,156 +1,95 @@
 # Educational ARP & DNS Manipulation Tool
 
-This project provides a controlled environment to study and demonstrate ARP and DNS behavior, including their weaknesses, inside an **authorized lab network** (e.g., VirtualBox host-only network).
-It is designed for **education only**, following responsible and ethical security practices.
+This project provides a controlled environment to study ARP and DNS weaknesses inside an **authorized lab network** (e.g., host-only or isolated NAT). It is for **education only**.
 
-Only the **network discovery module** is fully implemented at this stage.
-Other modules (ARP poisoning demo, DNS spoofing demo, defense mechanisms) will be implemented later.
+Implemented demos:
+- `discover` — ARP network discovery
+- `arp-demo` — bidirectional ARP poisoning with forwarding
+- `dns-demo` — DNS spoofing for a target domain
+- `ssl-strip` — HTTPS listener that 301-redirects to HTTP
 
 ---
 
 ## Requirements
 
-### Operating System
-
-* Kali Linux (recommended)
-* Other Linux distributions may also work
-
-### Python
-
-* Python **3.8+**
-
-### System Packages (Kali Linux)
-
-Install required system components:
-
-```
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y python3 python3-pip python3-venv
-sudo apt install -y tcpdump libpcap-dev
-```
-
-### Python Dependencies
-
-The tool currently requires:
-
-* Scapy
-
-Install it inside your virtual environment (see below):
-
-```
-pip install scapy
-```
+- Kali Linux recommended (other Linux may work)
+- Python 3.8+
+- System packages (Kali):
+  ```
+  sudo apt update && sudo apt upgrade -y
+  sudo apt install -y python3 python3-pip python3-venv tcpdump libpcap-dev
+  ```
+- Python deps:
+  ```
+  pip install scapy
+  ```
 
 ---
 
 ## Installation
 
-Open a terminal and navigate into the project folder:
-
-```
+```bash
 cd educational_arp_dns_tool
-```
-
-Create a virtual environment:
-
-```
 python3 -m venv .venv
-```
-
-Activate it:
-
-* Linux/macOS:
-
-  ```
-  source .venv/bin/activate
-  ```
-
-Upgrade pip and install dependencies:
-
-```
+source .venv/bin/activate
 pip install --upgrade pip
 pip install scapy
 ```
 
-If this fails, simply run the application with `sudo`.
+---
+
+## Running the CLI
+
+Run with sudo/root for packet features:
+
+```bash
+sudo python3 -m tool.cli --help
+```
+
+Subcommands:
+```
+discover   # ARP sweep of a CIDR
+arp-demo   # ARP poison two targets and forward
+dns-demo   # DNS spoof a target domain
+ssl-strip  # HTTPS redirector to HTTP
+```
 
 ---
 
-## Running the Application
+## Examples
 
-The entry point of the tool is the CLI:
-
-```
-python3 -m tool.cli --help
-```
-
-You should see available subcommands:
-
-```
-discover     # ARP-based network discovery (currently working)
-arp-demo     # placeholder
-dns-demo     # placeholder
-analyze      # placeholder
-defense      # placeholder
+### Discover
+```bash
+sudo python3 -m tool.cli discover -r 192.168.178.0/24
 ```
 
-Because ARP and packet-level operations require elevated privileges, run the tool with `sudo` on Kali.
-
----
-
-## Network Discovery (Current Working Scenario)
-
-To run the ARP-based host discovery:
-
+### ARP poisoning demo
+```bash
+sudo python3 -m tool.cli arp-demo 192.168.178.10 192.168.178.1 -I eth0 -c 5 -i 1
 ```
-sudo python3 -m tool.cli discover
+- `-I` interface; `-c` initial poison bursts; `-i` interval while running.
+
+### DNS spoofing demo
+```bash
+sudo python3 -m tool.cli dns-demo example.com -s 192.168.178.76 -I eth0
 ```
+- Add `-v <victim-ip>` to only spoof one host.
 
-This performs:
+### SSL strip demo (lab hostname)
+```bash
+# attacker terminal 1: plain HTTP target
+sudo python3 -m http.server 80
 
-1. ARP broadcast scanning across the configured subnet
-2. Collection of responses
-3. Output of discovered IP/MAC pairs
+# attacker terminal 2: SSL redirector
+sudo python -m tool.cli ssl-strip demo.local -b 192.168.178.76 -I eth0
 
-Example output:
-
+# victim: map hostname to attacker IP
+echo "192.168.178.76 demo.local" | sudo tee -a /etc/hosts
 ```
-[i] Starting ARP scan on range: 192.168.56.0/24
-[i] ARP scan finished, found 2 hosts.
-
-[*] Discovered hosts:
-    192.168.56.1      08:00:27:11:22:33
-    192.168.56.10     08:00:27:aa:bb:cc
-```
-
-If no hosts are found:
-
-* Check the subnet configured in `network_discovery.run()`
-* Ensure other machines are running on the same host-only network
-* Confirm you are in a safe, isolated lab environment
+Browse to `https://demo.local` from the victim, accept the cert warning, and you should be redirected to `http://demo.local`. HSTS-preloaded sites (e.g., google.com, example.com) will not downgrade.
 
 ---
 
 ## Ethical Notice
 
-This tool must be used **only**:
-
-* In private networks you own, or
-* In networks where you have **explicit written permission**
-
-Running ARP/DNS manipulation on unauthorized networks is illegal and unethical.
-
-This project exists for **educational purposes** aligned with defensive security learning.
-
----
-
-## Summary of Commands
-
-```
-cd educational_arp_dns_tool
-python3 -m venv .venv
-source .venv/bin/activate
-pip install scapy
-sudo python3 -m tool.cli discover
-```
-
+Use only on networks you own or where you have explicit written permission. Running ARP/DNS manipulation on unauthorized networks is illegal and unethical. This project exists for educational purposes aligned with defensive security learning.
