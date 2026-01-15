@@ -15,7 +15,9 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescrip
 DEFAULT_IFACE = "eth0"
 
 
+# Validate CIDR input string and return it if well-formed.
 def _cidr(arg_value: str) -> str:
+    # Validate CIDR strings early so argparse can show a clean error.
     try:
         ipaddress.ip_network(arg_value, strict=False)
     except ValueError:
@@ -23,6 +25,7 @@ def _cidr(arg_value: str) -> str:
     return arg_value
 
 
+# Prompt for input with optional default/validator and handle empty or interrupt cases.
 def _prompt(
     text: str,
     default: Optional[str] = None,
@@ -35,6 +38,7 @@ def _prompt(
             value = input(f"{text}{suffix}: ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
+            # Treat Ctrl+C / EOF as "accept default" when available.
             if default is None:
                 return default
             if validator:
@@ -66,28 +70,36 @@ def _prompt(
         return value
 
 
+# Convert a string to int for numeric prompts, raising a friendly error on failure.
 def _to_int(value: str) -> int:
+    # Keep error messages consistent for menu/input prompts.
     try:
         return int(value)
     except ValueError as exc:
         raise ValueError("Enter a whole number.") from exc
 
 
+# Convert a string to float for numeric prompts, raising a friendly error on failure.
 def _to_float(value: str) -> float:
+    # Used for interval prompts to allow fractional seconds.
     try:
         return float(value)
     except ValueError as exc:
         raise ValueError("Enter a number.") from exc
 
 
+# Reuse _cidr for prompt validation and normalize errors to ValueError.
 def _validate_cidr(value: str) -> str:
+    # Convert argparse-style error into a ValueError for prompt reuse.
     try:
         return _cidr(value)
     except argparse.ArgumentTypeError as exc:
         raise ValueError(str(exc)) from exc
 
 
+# Ask a yes/no question and return a boolean, defaulting when input is empty.
 def _prompt_yes_no(text: str, default: bool = False) -> bool:
+    # Accepts y/yes as True; anything else is False.
     default_value = "y" if default else "n"
     value = _prompt(text, default=default_value, allow_empty=True)
     if value is None:
@@ -95,7 +107,10 @@ def _prompt_yes_no(text: str, default: bool = False) -> bool:
     return value.lower() in ("y", "yes")
 
 
+# Prompt for a fixed set of option strings and return the chosen value.
 def _prompt_choice(text: str, options: Tuple[str, ...], default: str) -> str:
+    # Enforce menu-style choices from a fixed set of options.
+    # Validate the choice string against the provided options tuple.
     def _validator(value: str) -> str:
         if value not in options:
             raise ValueError(f"Choose one of: {', '.join(options)}")
@@ -104,7 +119,9 @@ def _prompt_choice(text: str, options: Tuple[str, ...], default: str) -> str:
     return _prompt(text, default=default, validator=_validator)
 
 
+# Run the menu-driven UI and dispatch to tool actions based on user input.
 def _run_interactive(parser: argparse.ArgumentParser) -> None:
+    # Menu-driven mode for quick lab use without remembering flags.
     menu = (
         ("discover", "ARP scan a subnet"),
         ("arp-demo", "ARP MITM between victim and router"),
@@ -119,6 +136,7 @@ def _run_interactive(parser: argparse.ArgumentParser) -> None:
         for index, (cmd, desc) in enumerate(menu, start=1):
             print(f"  {index}) {cmd} - {desc}")
 
+        # Parse the menu index input and ensure it is in range.
         def _menu_choice(value: str) -> int:
             choice = _to_int(value)
             if choice < 1 or choice > len(menu):
@@ -178,6 +196,7 @@ def _run_interactive(parser: argparse.ArgumentParser) -> None:
             html_body = None
             html_file = None
             if _prompt_yes_no("Serve custom HTML instead of redirect? (y/N)", default=False):
+                # Keep HTML input simple in interactive mode.
                 source = _prompt_choice("HTML source: 1) inline 2) file", options=("1", "2"), default="1")
                 if source == "2":
                     html_file = _prompt("HTML file path")
@@ -196,7 +215,9 @@ def _run_interactive(parser: argparse.ArgumentParser) -> None:
             return
 
 
+# Parse CLI args or fall back to interactive menu when no arguments are provided.
 def main():
+    # CLI supports both classic flags and a menu when no args are provided.
     parser = argparse.ArgumentParser(
         description="Educational ARP & DNS Manipulation Lab Tool (authorized lab use only)",
         formatter_class=_HelpFormatter,
