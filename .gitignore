@@ -1,0 +1,4 @@
+# .gitignore
+tool/__pycache__/tool/__pycache__/
+tool/__pycache__/
+tool/__pycache__/
