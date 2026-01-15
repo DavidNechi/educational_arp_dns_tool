@@ -150,8 +150,8 @@ def _run_interactive(parser: argparse.ArgumentParser) -> None:
             interval = _prompt("Interval seconds", default="2.0", validator=_to_float)
             iface = _prompt("Interface", default=DEFAULT_IFACE)
             arp_lab.run(
-                target1_ip=target1,
-                target2_ip=target2,
+                victim_ip=target1,
+                router_ip=target2,
                 count=count,
                 interval=interval,
                 iface=iface,
@@ -232,8 +232,8 @@ def main():
         description="Poison a victim and a router/gateway to forward their traffic through the attacker (MITM).",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    arp_parser.add_argument("target1", help="Victim IP address")
-    arp_parser.add_argument("target2", help="Router/Gateway IP address")
+    arp_parser.add_argument("victim", help="Victim IP address")
+    arp_parser.add_argument("router", help="Router/Gateway IP address")
     arp_parser.add_argument(
         "-c",
         "--count",
@@ -324,8 +324,8 @@ def main():
         network_discovery.run(ip_range=args.ip_range)
     elif args.cmd == "arp-demo":
         arp_lab.run(
-            target1_ip=args.target1,
-            target2_ip=args.target2,
+            victim_ip=args.victim,
+            router_ip=args.router,
             count=args.count,
             interval=args.interval,
             iface=args.iface,
