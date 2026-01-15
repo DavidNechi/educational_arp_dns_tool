@@ -1,6 +1,6 @@
 # Educational ARP & DNS Manipulation Tool
 
-This project provides a controlled environment to study ARP and DNS weaknesses inside an **authorized lab network** (e.g., host-only or isolated NAT). It is for **education only**.
+This project provides a controlled environment to study ARP and DNS weaknesses inside an **authorized lab network** (e.g., host-only or isolated NAT).
 
 Implemented demos:
 - `discover` — ARP network discovery
@@ -186,9 +186,3 @@ Browse to `https://demo.local` from the victim, accept the cert warning, and you
 ```bash
 sudo python -m tool.cli ssl-strip demo.local -b 192.168.178.76 -I eth0 --html "<h1>test passed</h1>"
 ```
-
----
-
-## Ethical Notice
-
-Use only on networks you own or where you have explicit written permission. Running ARP/DNS manipulation on unauthorized networks is illegal and unethical. This project exists for educational purposes aligned with defensive security learning.
