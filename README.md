@@ -64,25 +64,87 @@ Default interface is `eth0` for demos that send/receive packets; override with `
 
 ---
 
-## How Each Demo Works
+## Interactive CLI (Menu Mode)
+
+If you run the CLI with no arguments, it displays a numbered menu and then asks for the required inputs for the selected demo.
+
+Example session:
+
+```
+$ sudo python3 -m tool.cli
+Interactive menu:
+  1) discover - ARP scan a subnet
+  2) arp-demo - ARP MITM between victim and router
+  3) dns-demo - DNS spoof a target domain
+  4) ssl-strip - HTTPS redirector or HTML response
+  5) help - Show CLI help
+  6) exit - Exit
+Select an option: 1
+IP range (CIDR) [192.168.178.0/24]:
+```
+
+For interactive prompts, press Enter to accept the default (including the default `eth0` interface).
+
+---
+
+## Functionality Details
+
+### Discover (`discover`)
+Inputs:
+- CIDR range (e.g., `192.168.178.0/24`)
+
+How it works:
+- Sends ARP who-has requests to the broadcast MAC for the entire CIDR.
+- Collects replies and prints a table of IP/MAC pairs.
+
+Example output:
+```
+[i] Starting ARP scan on range: 192.168.178.0/24
+[i] ARP scan finished, found 2 hosts.
+
+[*] Discovered hosts on the lab network:
+    IP address        MAC address
+    --------------    -----------------
+    192.168.178.1     08:00:27:11:22:33
+    192.168.178.10    08:00:27:aa:bb:cc
+```
 
 ### ARP Lab (`arp-demo`)
-This module performs a classic MITM between a victim and a router/gateway:
-- Resolves the victim and router MAC addresses using ARP.
-- Sends spoofed ARP replies so both endpoints map the other IP to the attacker MAC.
-- Forwards Ethernet frames between victim and router so connectivity continues while traffic passes through the attacker.
+Inputs:
+- Victim IP
+- Router/gateway IP
+- Interface (`-I`, default `eth0`)
+- Optional: poison count (`-c`), interval (`-i`)
+
+How it works:
+- Resolves victim and router MACs via ARP.
+- Sends spoofed ARP replies to both endpoints so they map the other IP to the attacker MAC.
+- Forwards Ethernet frames between victim and router so traffic continues while passing through the attacker.
 
 ### DNS Lab (`dns-demo`)
-This module spoofs DNS answers for a target domain:
+Inputs:
+- Target domain (e.g., `example.com`)
+- Optional: spoof IP (defaults to attacker interface IP)
+- Optional: victim IP filter (`-v`)
+- Interface (`-I`, default `eth0`)
+
+How it works:
 - Sniffs UDP/53 DNS queries on the chosen interface.
 - Matches queries for the target domain (optionally only from one victim IP).
 - Sends a forged DNS response pointing to the spoof IP.
 - If a victim IP is provided, inserts an iptables rule to drop that victim's real DNS replies so spoofing wins the race.
 
 ### SSL Strip (`ssl-strip`)
-This module terminates HTTPS locally and responds in one of two modes:
-- Redirect mode: sends a 301 to `http://<target-host>`.
-- HTML mode: serves custom HTML from `--html` or `--html-file`.
+Inputs:
+- Target host (e.g., `demo.local`)
+- Optional: bind IP (`-b`, defaults to interface IP)
+- Interface (`-I`, default `eth0`)
+- Optional: `--html` or `--html-file` to serve custom HTML
+
+How it works:
+- Binds to TCP/443 with a self-signed certificate.
+- Redirect mode: replies with a 301 to `http://<target-host>`.
+- HTML mode: replies with a 200 and your custom HTML.
 
 It does not reroute traffic by itself; you must direct the victim to the attacker (hosts file, DNS spoof, or MITM routing). HSTS-preloaded sites will not downgrade.
 
